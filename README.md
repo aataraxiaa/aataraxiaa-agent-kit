@@ -1,6 +1,6 @@
 # aataraxiaa agent kit
 
-<img src="plugins/aataraxiaa/assets/icon.png" alt="A friendly yellow toolbox with a lowercase a" width="180">
+<img src="plugins/aataraxiaa/assets/icon.png" alt="A deadpan yellow toolbox with a lowercase a" width="180">
 
 Personal development skills for Claude Code and Codex. The first skill, `aataraxiaa:visual-review`, helps you understand agent-written work through concise interactive HTML explanations.
 
@@ -20,7 +20,7 @@ claude plugin install aataraxiaa@aataraxiaa-tools
 ### Codex
 
 ```sh
-codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.2.0
+codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.2.1
 codex plugin add aataraxiaa@aataraxiaa-tools
 ```
 
