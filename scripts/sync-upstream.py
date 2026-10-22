@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-"""Reproduce the pinned, unchanged upstream plugin from a local Git checkout."""
 import argparse
 import hashlib
 import json
@@ -7,9 +6,9 @@ from pathlib import Path
 import shutil
 import subprocess
 
-REVISION = '5f378868e0ea745a6284b51e710c390f0c76f72c'
 ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / 'plugins/aataraxiaa/vendor'
+REVISION = json.loads((DEST / 'provenance.json').read_text())['revision']
 
 
 def manifest():
@@ -27,7 +26,8 @@ def main():
         saved = json.loads(provenance.read_text())
         if saved['files'] != manifest():
             raise SystemExit('Vendored files differ from pinned checksums')
-        print('Pinned upstream checksums match'); return
+        print('Pinned upstream checksums match')
+        return
     if not args.checkout:
         parser.error('Supply a local upstream Git checkout, or use --check')
     checkout = Path(args.checkout).resolve()

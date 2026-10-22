@@ -1,1 +1,9 @@
-{"name":"aataraxiaa","version":"0.1.0","description":"Interactive visual review checkpoints for plans, implementation and reviews.","author":{"name":"aataraxiaa"},"hooks":"./hooks/hooks.json"}
+{
+  "name": "aataraxiaa",
+  "version": "0.1.0",
+  "description": "Reusable development skills for Pete, starting with visual review.",
+  "author": {
+    "name": "aataraxiaa"
+  },
+  "hooks": "./hooks/hooks.json"
+}

@@ -1,4 +1,3 @@
-"""Local task journal and source-bound delivery receipts."""
 import hashlib
 import json
 import os
@@ -44,31 +43,38 @@ def artifact_root(cwd):
 
 
 def fingerprint(cwd, base=None, target=None):
-    """Hash source bytes, never print them. Refuse dirty .env files."""
     h = hashlib.sha256()
     def add(value):
-        h.update(len(value).to_bytes(8, 'big')); h.update(value)
+        h.update(len(value).to_bytes(8, 'big'))
+        h.update(value)
     inside = git(cwd, 'rev-parse', '--is-inside-work-tree', check=False).strip() == b'true'
     if inside:
         add(git(cwd, 'rev-parse', '--verify', 'HEAD', check=False))
         add(git(cwd, 'ls-files', '--stage', '-z'))
-        status = git(cwd, 'status', '--porcelain=v1', '-z', '--untracked-files=all')
+        status = git(cwd, 'status', '--porcelain=v1', '-z', '--untracked-files=all', '--ignore-submodules=none')
         add(status)
         dirty_names = [part[3:] if len(part) > 3 and part[2:3] == b' ' else part for part in status.split(b'\0') if part]
         if any('.env' == Path(os.fsdecode(n)).name or Path(os.fsdecode(n)).name.startswith('.env.') for n in dirty_names):
             raise WorkflowError('Dirty or untracked .env files prevent certification; their content is never read')
-        names = set(git(cwd, 'ls-files', '-z', '--cached', '--others', '--exclude-standard').split(b'\0')) - {b''}
+        names = set(git(cwd, 'diff', '--name-only', '-z', '--no-renames', '--ignore-submodules=none').split(b'\0'))
+        names.update(git(cwd, 'ls-files', '-z', '--others', '--exclude-standard').split(b'\0'))
+        names.discard(b'')
         for name in sorted(names):
             path = cwd / os.fsdecode(name)
             add(name)
             if path.name == '.env' or path.name.startswith('.env.'):
-                add(b'clean secret file: index binding only'); continue
+                add(b'clean secret file: index binding only')
+                continue
             if path.is_symlink():
                 add(b'link:' + os.fsencode(os.readlink(path)))
             elif path.is_file():
-                add(path.read_bytes()); add(str(path.stat().st_mode).encode())
+                add(path.read_bytes())
+                add(str(path.stat().st_mode).encode())
             elif path.is_dir():
-                add(json.dumps(fingerprint(path), sort_keys=True).encode())
+                if canonical(path) == path.resolve():
+                    add(json.dumps(fingerprint(path), sort_keys=True).encode())
+                else:
+                    add(b'uninitialized submodule')
             else:
                 add(b'deleted')
     else:
@@ -86,7 +92,8 @@ def fingerprint(cwd, base=None, target=None):
                 refs[key] = git(cwd, 'rev-parse', '--verify', ref + '^{commit}').decode().strip()
             except subprocess.CalledProcessError as exc:
                 raise WorkflowError(f'Cannot resolve {key} commit') from exc
-            add(key.encode()); add(refs[key].encode())
+            add(key.encode())
+            add(refs[key].encode())
     return {'sha256': h.hexdigest(), 'refs': refs}
 
 
@@ -96,14 +103,22 @@ class Journal:
             raise WorkflowError('Supply the host session id with --session')
         self.cwd = canonical(cwd)
         self.session = session
-        self.root = Path(root).resolve() if root else artifact_root(self.cwd)
-        self.root.mkdir(parents=True, exist_ok=True)
-        if self.root == self.cwd or self.cwd in self.root.parents:
+        self.project_root = Path(root).resolve() if root else artifact_root(self.cwd)
+        self.project_root.mkdir(parents=True, exist_ok=True)
+        if self.project_root == self.cwd or self.cwd in self.project_root.parents:
             raise WorkflowError('Artifacts must be outside the worktree')
-        self.db = sqlite3.connect(self.root / 'journal.sqlite3', timeout=15, isolation_level=None)
+        self.db = sqlite3.connect(self.project_root / 'journal.sqlite3', timeout=15, isolation_level=None)
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA journal_mode=WAL')
         self.db.execute('CREATE TABLE IF NOT EXISTS tasks (worktree TEXT, session TEXT, data TEXT, PRIMARY KEY(worktree,session))')
+
+    @property
+    def root(self):
+        task = self.load()
+        key = task['id'] if task else 'pending-' + digest((str(self.cwd) + self.session).encode())[:20]
+        path = self.project_root / 'tasks' / key
+        path.mkdir(parents=True, exist_ok=True)
+        return path
 
     def load(self):
         row = self.db.execute('SELECT data FROM tasks WHERE worktree=? AND session=?', (str(self.cwd), self.session)).fetchone()
@@ -117,7 +132,8 @@ class Journal:
             self.db.execute('COMMIT')
             return task
         except BaseException:
-            self.db.execute('ROLLBACK'); raise
+            self.db.execute('ROLLBACK')
+            raise
 
     def begin(self, kind, scope, base=None, target=None, pending=False, new=False):
         if kind in ('code-review', 'pr-review') and not pending and not (base and target):
@@ -168,7 +184,7 @@ class Journal:
                 raise WorkflowError('Task changed during presentation')
             current['receipts'][stage] = dict(task=current['id'], stage=stage, scope=current['scope'],
                 session=self.session, worktree=str(self.cwd), source=source, html=str(path), sha256=digest(data),
-                delivery='viewer command returned success; no human approval', generator='visual-explainer@5f378868e0ea745a6284b51e710c390f0c76f72c')
+                delivery='viewer command returned success; no human approval', generator='visual-explainer@' + json.loads((Path(__file__).resolve().parents[1] / 'vendor/provenance.json').read_text())['revision'])
             return current
         return self.transaction(update)
 
@@ -192,7 +208,8 @@ class Journal:
                 continue
             receipt = task['receipts'].get(stage)
             if not receipt:
-                missing.append(stage); continue
+                missing.append(stage)
+                continue
             path = Path(receipt['html'])
             valid = path.is_file() and digest(path.read_bytes()) == receipt['sha256']
             valid = valid and receipt['task'] == task['id'] and receipt['scope'] == task['scope']

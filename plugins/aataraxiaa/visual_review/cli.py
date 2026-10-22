@@ -23,12 +23,20 @@ def main(argv=None):
     begin = sub.add_parser('begin')
     begin.add_argument('--kind', choices=['implementation','plan','code-review','pr-review','discussion'], required=True)
     begin.add_argument('--scope', required=True)
-    begin.add_argument('--base'); begin.add_argument('--target'); begin.add_argument('--pending', action='store_true'); begin.add_argument('--new', action='store_true')
-    resolve = sub.add_parser('resolve'); resolve.add_argument('--base', required=True); resolve.add_argument('--target', required=True)
+    begin.add_argument('--base')
+    begin.add_argument('--target')
+    begin.add_argument('--pending', action='store_true')
+    begin.add_argument('--new', action='store_true')
+    resolve = sub.add_parser('resolve')
+    resolve.add_argument('--base', required=True)
+    resolve.add_argument('--target', required=True)
     sub.add_parser('status')
-    check = sub.add_parser('check'); check.add_argument('--publish', action='store_true'); check.add_argument('--editing', action='store_true')
+    check = sub.add_parser('check')
+    check.add_argument('--publish', action='store_true')
+    check.add_argument('--editing', action='store_true')
     for name in ('render', 'record'):
-        p = sub.add_parser(name); p.add_argument('--stage', choices=['plan','post','review'], required=True)
+        p = sub.add_parser(name)
+        p.add_argument('--stage', choices=['plan','post','review'], required=True)
         p.add_argument('--source' if name == 'render' else '--html', required=True)
         p.add_argument('--present', action='store_true', required=True)
     sub.add_parser('hook')
@@ -44,7 +52,8 @@ def main(argv=None):
                     result = {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny', 'permissionDecisionReason': message}}
                 else:
                     result = {'systemMessage': message}
-            print(json.dumps(result)); return 0
+            print(json.dumps(result))
+            return 0
         journal = Journal(args.cwd, args.session)
         if args.action == 'begin':
             task = journal.begin(args.kind, args.scope, args.base, args.target, args.pending, args.new)
@@ -62,10 +71,12 @@ def main(argv=None):
             task = journal.receipt(args.stage, output, present)
         elif args.action == 'check':
             missing = journal.missing(publish=args.publish, editing=args.editing)
-            print(json.dumps({'missing': missing})); return 1 if missing else 0
+            print(json.dumps({'missing': missing}))
+            return 1 if missing else 0
         else:
             task = journal.load()
         print(json.dumps({'task': task, 'missing': journal.missing(task), 'artifacts': str(journal.root)}, indent=2))
         return 0
     except (WorkflowError, OSError, subprocess.CalledProcessError) as exc:
-        print('visual-review: ' + str(exc), file=sys.stderr); return 2
+        print('visual-review: ' + str(exc), file=sys.stderr)
+        return 2
