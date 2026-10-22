@@ -1,6 +1,15 @@
 {
   "name": "aataraxiaa-tools",
-  "owner": {"name": "aataraxiaa"},
-  "description": "Source-bound visual review workflows for Claude Code and Codex.",
-  "plugins": [{"name": "aataraxiaa", "source": "./plugins/aataraxiaa", "version": "0.1.0", "description": "Interactive plans, implementation results and code review checkpoints."}]
+  "owner": {
+    "name": "aataraxiaa"
+  },
+  "description": "Reusable development skills for Claude Code and Codex.",
+  "plugins": [
+    {
+      "name": "aataraxiaa",
+      "source": "./plugins/aataraxiaa",
+      "version": "0.1.0",
+      "description": "Development skills, starting with interactive visual review checkpoints."
+    }
+  ]
 }

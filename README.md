@@ -6,22 +6,27 @@ The companion keeps task receipts outside application checkouts. Hooks require a
 
 ## Install
 
-Register this repository as a local marketplace in each host, install `aataraxiaa` from `aataraxiaa-tools`, then review and trust its hooks through the host's normal workflow. The marketplace is `.claude-plugin/marketplace.json`; both host manifests are bundled under `plugins/aataraxiaa/`. Do not install the vendored upstream plugin separately for this workflow.
+Install from the public GitHub marketplace.
 
-For Claude Code, from a checkout of this repository:
+For Claude Code:
 
 ```sh
-claude plugin marketplace add .
+claude plugin marketplace add aataraxiaa/aataraxiaa-agent-kit
 claude plugin install aataraxiaa@aataraxiaa-tools
 ```
 
-For a temporary Claude development session:
+For Codex:
 
 ```sh
-claude --plugin-dir /absolute/path/to/aataraxiaa-agent-kit/plugins/aataraxiaa
+codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.1.0
+codex plugin add aataraxiaa@aataraxiaa-tools
 ```
 
-For Codex, add this local marketplace through the plugin interface, install `aataraxiaa`, then use `/hooks` to review and trust the exact definitions. Hook changes need renewed trust. Do not bypass native hook trust. Installation, native registration and event coverage must be verified separately on each host before describing the workflow as active.
+Start a fresh session after installation. In Codex, use `/hooks` to review and trust the definitions. Complete Claude Code's normal trust flow if prompted. Hook changes need renewed trust. Installation and live event coverage must be verified separately before treating enforcement as active.
+
+If this marketplace is already registered from a local checkout, remove that marketplace registration through the host's plugin manager before adding the GitHub source.
+
+Do not install the vendored upstream plugin separately for this workflow. Both host manifests are bundled under `plugins/aataraxiaa/`.
 
 Requires Python 3.9+, Git, Node.js and an OS HTML opener. The companion uses Python's standard library, SQLite and upstream's dependency-free renderer. It starts no MCP server and makes no model calls from hooks.
 
