@@ -1,87 +1,102 @@
-# Aataraxiaa Agent Kit
+# aataraxiaa agent kit
 
-A personal plugin for Claude Code and Codex. The first skill, `aataraxiaa:visual-review`, makes substantive plans, implementation results, code reviews and PR reviews reviewable as interactive HTML.
+<img src="plugins/aataraxiaa/assets/icon.png" alt="A friendly yellow toolbox with a lowercase a" width="180">
 
-The companion keeps task receipts outside application checkouts. Hooks require a presented plan before known edits and a current result visual before known PR creation commands. Read-only reviews need an explicit base and target and a visual before final delivery. Receipts record delivery evidence. They never record or imply human approval.
+Personal development skills for Claude Code and Codex. The first skill, `aataraxiaa:visual-review`, helps you understand agent-written work through concise interactive HTML explanations.
+
+**Advisory by default.** It offers visuals for meaningful plans, results and reviews. It does not block edits or force another turn. Routine inspection, bot notices and empty diffs need no page.
 
 ## Install
 
-Install from the public GitHub marketplace.
+Requires Python 3.9+, Git, Node.js and an OS HTML opener.
 
-For Claude Code:
+### Claude Code
 
 ```sh
 claude plugin marketplace add aataraxiaa/aataraxiaa-agent-kit
 claude plugin install aataraxiaa@aataraxiaa-tools
 ```
 
-For Codex:
+### Codex
 
 ```sh
-codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.1.0
+codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.2.0
 codex plugin add aataraxiaa@aataraxiaa-tools
 ```
 
-Start a fresh session after installation. In Codex, use `/hooks` to review and trust the definitions. Complete Claude Code's normal trust flow if prompted. Hook changes need renewed trust. Installation and live event coverage must be verified separately before treating enforcement as active.
+Start a fresh session. Review native hook trust prompts; Codex uses `/hooks`. Hook changes may require renewed trust. Check the installation with `claude plugin list` or `codex plugin list`. Installation alone does not prove live hook behavior.
 
-If this marketplace is already registered from a local checkout, remove that marketplace registration through the host's plugin manager before adding the GitHub source.
+If the marketplace was previously registered from a local checkout, remove that registration first:
 
-Do not install the vendored upstream plugin separately for this workflow. Both host manifests are bundled under `plugins/aataraxiaa/`.
+```sh
+# Run the command for your host, then use its install commands above.
+claude plugin marketplace remove aataraxiaa-tools
+codex plugin marketplace remove aataraxiaa-tools
+```
 
-Requires Python 3.9+, Git, Node.js and an OS HTML opener. The companion uses Python's standard library, SQLite and upstream's dependency-free renderer. It starts no MCP server and makes no model calls from hooks.
+### Update
 
-## Workflow
+For Claude Code:
 
-The SessionStart hook gives the exact CLI path. Every command accepts `--cwd PATH --session HOST_SESSION_ID` before its operation. Use the session id from the hook, rather than an invented value. A task is bound to its canonical worktree and host session. Some Codex subagents report their parent's session id. Delegated readers must not call `begin` or change the parent's scope.
+```sh
+claude plugin marketplace update aataraxiaa-tools
+claude plugin update aataraxiaa@aataraxiaa-tools
+```
+
+For a Codex installation pinned to an older tag, remove the marketplace registration and re-add it with the new release tag, then run `codex plugin add aataraxiaa@aataraxiaa-tools`. Restart the host after updates. Do not hand-edit plugin caches.
+
+## How it works
+
+The agent explicitly declares meaningful work and offers a visual when it helps. A declared task can receive one optional reminder at Stop; it never forces a continuation in advisory mode. Merely editing a file does not create a task in this mode.
+
+One host session owns one active request across worktrees. Its plan is shared; its result includes the source state of every worktree registered by supported edit hooks. New requests get new task IDs and separate HTML directories. Human overrides apply to that same session task, regardless of the working folder.
+
+The CLI path and session ID appear in hook context. All commands accept `--cwd PATH --session HOST_SESSION_ID` before the operation:
 
 ```sh
 python3 /plugin/scripts/visual-review --session SESSION begin --kind implementation --scope "Add empty-state behavior"
 python3 /plugin/scripts/visual-review --session SESSION status
-```
-
-Write `plan.src.html` in the artifact directory printed by `status`, using the bundled upstream visual-explainer instructions. Present it before editing:
-
-```sh
 python3 /plugin/scripts/visual-review --session SESSION render --stage plan --source /artifacts/plan.src.html --present
 ```
 
-After implementation, inspect the actual diff, author and present `post.src.html` with `--stage post`. Before creating a PR:
+Use `post` after implementation, or `review` for code/PR review. Reviews declare explicit `--base` and `--target` commits. Empty diffs and unresolved targets do not trigger a Stop checkpoint. Use `include --path WORKTREE` for worktrees changed through tools that hooks cannot recognize. `begin --kind discussion --scope "No visual needed"` dismisses an active task.
+
+Receipts bind source and HTML hashes. A successful OS viewer command is delivery evidence, never human approval. The renderer runs without optional browser checks; the agent should inspect layout when browser tooling is available.
+
+## Optional strict mode
+
+Explicitly opt in when starting your host:
 
 ```sh
-python3 /plugin/scripts/visual-review --session SESSION check --publish
+VISUAL_REVIEW_MODE=strict claude
+# Or:
+VISUAL_REVIEW_MODE=strict codex
 ```
 
-For a read-only code or PR review, use `begin --kind code-review|pr-review --scope "..." --base COMMIT --target COMMIT`. Use `--pending` if the target first needs discovery, then `resolve --base COMMIT --target COMMIT`. Present the review with `--stage review`. Plan-only tasks use `--kind plan` and `--stage plan`. Discussion and ordinary inspection need no visual. Switching an incomplete substantive task to discussion is refused.
+Strict mode requires a plan before supported source-file edits and a current result before recognized PR creation. It may request one continuation at Stop. Unset the variable to restore advisory behavior. Agents must not opt in on your behalf.
 
-`begin` is idempotent for the same declaration. A changed scope or `--new` starts a new task and requires new checkpoints. Ordinary prompt followups preserve the active task and its valid plan. A new explicit task can use the prefix `New task:`; the skill must declare changed scope when intent is less obvious. Prompt detection deliberately does not treat every mention of "review" or every `git diff` as a new review.
+Even in strict mode, reads, shell redirects, host configuration, ignored files, scratch directories (`tmp`, `temp`, `scratch`, `work`), and the plugin's full artifact root are exempt. Git operations alone do not require a page. Opaque scripts, interactive terminal input and unsupported tools are outside coverage. This is not a security boundary.
 
-The renderer uses actual upstream `kit/render.mjs`, with `--no-check` to avoid optional browser checking dependencies. Inspect rendered pages with host browser tools where available. `record --stage STAGE --html /artifacts/page.html --present` can register an already rendered page. Both operations run the native viewer command and record only on success. They require interactive HTML with a script. This structural check cannot judge whether the content is a useful plan or review; the skill supplies that obligation. An opener returning success does not prove the human viewed the page.
+The human can send `visual-review override plan|post|review: reason` for a source-bound exception on the active session task. The agent must not manufacture user input.
 
-Only the human may send `visual-review override plan|post|review: reason`. The user prompt hook journals that exact exception against the current source fingerprint. There is no agent-facing override command. An agent must never synthesize a human prompt or invoke a hook with invented input. Local hooks are a workflow convention, not an adversarial security system.
+## Storage and compatibility
 
-## State and enforcement
+HTML and task journals live outside application checkouts under the directory provided by `~/.agents/bin/agent-task-dir`, with `AGENT_ARTIFACTS_DIR` and `AGENT_PROJECT_DIR` support. A small routing database under `~/.agents-work/visual-review-sessions/` connects session IDs to their initial artifact root, allowing sibling worktrees to share a task.
 
-The shared project SQLite journal lives in `review-artifacts/visual-review/`; each task has its own `tasks/TASK_ID/` artifact directory printed by `status`. State lives under the path returned by `~/.agents/bin/agent-task-dir`. Its `AGENT_PROJECT_DIR` and `AGENT_ARTIFACTS_DIR` overrides remain supported. Without that helper, the CLI uses `AGENT_ARTIFACTS_DIR` or a deterministic directory under `~/.agents-work/`. It refuses artifact directories inside the application worktree.
+Version 0.2.0 starts a fresh session-task table. Old worktree-scoped receipts remain on disk but do not carry old blocking state into the new workflow. No vendor files are modified.
 
-SQLite `BEGIN IMMEDIATE` transactions isolate task changes. Receipts bind stage, task, session, canonical worktree, scope, source fingerprint, pinned generator revision and HTML SHA-256. Fingerprints include HEAD, index entries, changed/deleted tracked worktree content, untracked source and review base/target commit identities. Git-ignored files are outside this contract. Clean `.env` files bind through their index entries without reading content; dirty or untracked `.env` files prevent certification. Symlink contents bind as link targets, rather than reading outside the checkout. Dirty submodules recursively bind their HEAD, index and changed content. Unchanged tracked files bind through Git object identities without reading their bytes.
+## Upstream updates
 
-A plan receipt survives changes within its declared implementation scope. A post or review receipt requires the current source fingerprint. Missing, deleted or altered HTML invalidates any stage. The final Stop hook requests one continuation per unresolved stage/source fingerprint, then emits a visible `INCOMPLETE` message. It does not falsely mark the task complete or loop forever.
+Visual Explainer 0.14.0 is bundled unchanged from [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer) at `5f378868e0ea745a6284b51e710c390f0c76f72c`. Its license and checksums are in `plugins/aataraxiaa/vendor/`.
 
-`PreToolUse` denies known edits without a plan, including Claude `Write`/`Edit`, Codex `apply_patch` through `tool_input.command`, supported file-write MCP tools and recognized shell mutations. Writes confined to the current task artifact directory are exempt. Hooks resolve explicit shell workdirs, direct `cd`, `git -C`, absolute edit paths and each structured patch path before choosing that target worktree’s journal. Read-only commands remain available. Chained direct `gh pr create` and known GitHub MCP PR creation tools require a current plan and post visual, even when no task was previously declared. PR creation from a plan or review task starts an implementation scope and requires its checkpoints. Publication requires a clean committed tree, local origin, and current branch. Explicit `gh --repo`/`-R` and `--head`/`-H` must match that origin and branch; MCP calls must supply both repository and head. This proves local identity only: hooks do not fetch or certify the remote branch revision. Commit changes and refresh the post visual before opening a PR.
+Follow the [upstream maintenance plan](docs/upstream-maintenance.md): check weekly and before releases, review upstream changes, update the explicit pin in a branch, test, then release. Upstream changes are never automatically installed. The weekly check is a maintainer procedure; no scheduled job is configured yet.
 
-Codex code mode applies hooks to actual nested tool events; the companion handles those events. It does not parse JavaScript inside `functions.exec`. Opaque scripts, interpreter code, shell aliases/functions, commands hidden behind another shell, custom HTTP clients, interactive terminal input, unsupported file-edit tools and disabled or untrusted hooks remain coverage gaps. The shell recognizer intentionally recognizes supported direct commands rather than implementing a security sandbox. Unresolvable supported mutation targets are refused; use structured edits or explicit workdirs. In-place sed/perl edits, shell patch input and Git target options other than `-C` need a structured edit or a simpler direct command. Read-only `git stash list` and `git stash show` preserve review state. A command mentioning the helper does not gain a blanket exemption. Future unrelated skills do not automatically inherit this skill's task states.
-
-## Upstream and verification
-
-`plugins/aataraxiaa/vendor/visual-explainer` contains unchanged tracked files from [nicobailon/visual-explainer](https://github.com/nicobailon/visual-explainer), version 0.14.0, revision `5f378868e0ea745a6284b51e710c390f0c76f72c`. Its license and per-file checksums are in `vendor/LICENSE` and `vendor/provenance.json`. No `node_modules` or untracked upstream files are copied. The upstream skill is read lazily and is not exposed as another globally installed skill.
-
-Reproduce or verify the vendor copy:
+## Verification
 
 ```sh
-python3 scripts/sync-upstream.py /local/upstream/git/checkout
 python3 scripts/sync-upstream.py --check
 python3 -m unittest discover -s tests -v
 claude plugin validate plugins/aataraxiaa
 ```
 
-Behavior tests cover source and HTML freshness, task scope, read-only review targets, session and worktree isolation, edit and PR gates, failed presentation, artifact confinement, human exception journaling and bounded Stop recovery. These checks do not establish live native host coverage or actual browser presentation. Verify those separately after trusted installation.
+Tests exercise advisory and strict behavior, session/worktree sharing, artifacts, overrides and source freshness. Native host end-to-end testing and browser layout inspection must be verified separately; passing these tests does not establish either.

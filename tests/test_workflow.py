@@ -15,6 +15,9 @@ from visual_review.hooks import handle, shell_kind, tool_kind
 
 class WorkflowTests(unittest.TestCase):
     def setUp(self):
+        mode = patch.dict('os.environ', {'VISUAL_REVIEW_MODE': 'strict'})
+        mode.start()
+        self.addCleanup(mode.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -88,8 +91,8 @@ class WorkflowTests(unittest.TestCase):
         self.event('UserPromptSubmit', prompt='Also consider the empty case')
         self.assertEqual(self.journal.load()['id'], task)
         self.assertEqual(self.journal.missing(), ['post'])
-        with self.assertRaises(WorkflowError):
-            self.journal.begin('discussion', 'No visual')
+        self.journal.begin('discussion', 'No visual')
+        self.assertEqual(self.journal.missing(), [])
 
     def test_explicit_new_task_resets_plan(self):
         self.begin()
@@ -97,7 +100,7 @@ class WorkflowTests(unittest.TestCase):
         self.event('UserPromptSubmit', prompt='New task: implement another behavior')
         self.assertEqual(self.journal.missing(), ['plan','post'])
 
-    def test_read_only_review_requires_explicit_resolved_pair(self):
+    def test_read_only_review_requires_pair_and_skips_empty_diff(self):
         with self.assertRaises(WorkflowError):
             self.begin('code-review')
         self.begin('code-review', pending=True)
@@ -105,23 +108,23 @@ class WorkflowTests(unittest.TestCase):
         with self.assertRaises(WorkflowError):
             self.deliver('review')
         self.journal.resolve('HEAD', 'HEAD')
-        self.assertEqual(self.journal.missing(), ['review'])
+        self.assertEqual(self.journal.missing(), [])
         self.deliver('review')
         self.assertEqual(self.journal.missing(), [])
         (self.repo / 'code.txt').write_text('different')
-        self.assertEqual(self.journal.missing(), ['review'])
+        self.assertEqual(self.journal.missing(), [])
 
-    def test_stop_continues_once_then_visible_incomplete(self):
+    def test_strict_stop_continues_only_once_per_task(self):
         self.begin()
         first = self.event('Stop')
         self.assertEqual(first['decision'], 'block')
         second = self.event('Stop', stop_hook_active=True)
         self.assertNotIn('decision', second)
-        self.assertIn('INCOMPLETE', second['systemMessage'])
+        self.assertEqual(second, {})
         (self.repo / 'code.txt').write_text('changed')
-        self.assertEqual(self.event('Stop')['decision'], 'block')
+        self.assertEqual(self.event('Stop'), {})
 
-    def test_sessions_and_worktrees_do_not_share_receipts(self):
+    def test_sessions_are_isolated_and_worktrees_share_task(self):
         self.begin()
         self.deliver('plan')
         self.deliver('post')
@@ -131,8 +134,8 @@ class WorkflowTests(unittest.TestCase):
         worktree = self.root / 'other'
         self.git('worktree', 'add', '--detach', str(worktree))
         separate = Journal(worktree, 'session-1', self.store)
-        self.assertIsNone(separate.load())
-        self.assertEqual(separate.missing(publish=True), ['post'])
+        self.assertEqual(separate.load()['id'], self.journal.load()['id'])
+        self.assertEqual(separate.missing(editing=True), [])
 
     def test_known_edits_block_until_plan_including_actual_codex_patch(self):
         event = self.event('PreToolUse', tool_name='apply_patch', tool_input={'command':'*** Begin Patch\n*** Update File: code.txt\n@@\n-before\n+after\n*** End Patch'})
@@ -199,27 +202,23 @@ class WorkflowTests(unittest.TestCase):
             with self.assertRaisesRegex(WorkflowError, 'never read'):
                 fingerprint(self.repo)
 
-    def test_other_worktree_cannot_borrow_receipts(self):
+    def test_worktree_uses_session_plan_and_refreshes_result(self):
         self.begin()
         self.deliver('plan')
         self.deliver('post')
         other = self.root / 'other'
         self.git('worktree', 'add', '-b', 'other', str(other))
-        cases = [
-            ('exec_command', {'cmd': 'touch code.txt', 'workdir': str(other)}),
-            ('Bash', {'command': 'cd ' + str(other) + ' && touch code.txt'}),
-            ('Bash', {'command': 'git -C ' + str(other) + ' add code.txt'}),
-            ('Edit', {'file_path': str(other / 'code.txt')}),
-            ('apply_patch', {'command': '*** Update File: ' + str(self.repo / 'code.txt') + '\n*** Update File: ' + str(other / 'code.txt')}),
-            ('exec_command', {'cmd': 'gh pr create', 'workdir': str(other)}),
-        ]
-        for name, payload in cases:
-            with self.subTest(name=name, payload=payload):
-                result = self.event('PreToolUse', tool_name=name, tool_input=payload)
-                self.assertEqual(result['hookSpecificOutput']['permissionDecision'], 'deny')
+        result = self.event('PreToolUse', tool_name='Edit', tool_input={'file_path': str(other / 'code.txt')})
+        self.assertEqual(result, {})
+        self.assertEqual(self.journal.missing(), ['post'])
         foreign = Journal(other, 'session-1', self.store)
-        self.deliver('plan', foreign)
-        self.assertEqual(self.event('PreToolUse', tool_name='Edit', tool_input={'file_path': str(other / 'code.txt')}), {})
+        self.assertEqual(foreign.load()['id'], self.journal.load()['id'])
+        self.deliver('post')
+        (other / 'code.txt').write_text('changed')
+        self.assertEqual(self.journal.missing(), ['post'])
+        handle(dict(cwd=str(other), session_id='session-1', hook_event_name='UserPromptSubmit',
+                    prompt='visual-review override post: skip this one'), self.store)
+        self.assertEqual(self.journal.missing(), [])
 
     def test_publication_identity(self):
         self.begin()
@@ -249,7 +248,7 @@ class WorkflowTests(unittest.TestCase):
         from visual_review.cli import main
         self.begin()
         output = io.StringIO()
-        with patch('visual_review.core.artifact_root', return_value=self.store.resolve()), redirect_stdout(output):
+        with patch('visual_review.cli.Journal', return_value=self.journal), redirect_stdout(output):
             self.assertEqual(main(['--cwd', str(self.repo), '--session', 'session-1', 'status']), 0)
         self.assertEqual(json.loads(output.getvalue())['artifacts'], str(self.journal.root))
         result = self.event('PreToolUse', tool_name='Edit', tool_input={'file_path': str(self.repo / 'code.txt')})
@@ -262,7 +261,7 @@ class WorkflowTests(unittest.TestCase):
         for cmd in ('git stash list', 'git stash show -p'):
             self.assertEqual(self.event('PreToolUse', tool_name='Bash', tool_input={'command': cmd}), {})
             self.assertEqual(self.journal.load(), before)
-        self.assertEqual(self.event('PreToolUse', tool_name='Bash', tool_input={'command': 'git stash push'})['hookSpecificOutput']['permissionDecision'], 'deny')
+        self.assertEqual(self.event('PreToolUse', tool_name='Bash', tool_input={'command': 'git stash push'}), {})
 
     def test_fingerprint_reads_only_changed_content(self):
         initial = fingerprint(self.repo)
@@ -315,6 +314,64 @@ class WorkflowTests(unittest.TestCase):
         self.assertNotEqual(second, fingerprint(self.repo))
         self.git('submodule', 'deinit', '-f', 'child')
         fingerprint(self.repo)
+
+    def test_advisory_never_denies_or_continues_and_reminds_once(self):
+        with patch.dict('os.environ', {}, clear=True):
+            self.assertEqual(self.event('PreToolUse', tool_name='Edit', tool_input={'file_path':str(self.repo / 'code.txt')}), {})
+            self.assertIsNone(self.journal.load())
+            self.assertEqual(self.event('Stop'), {})
+            self.begin()
+            for name, payload in [('Edit', {'file_path':str(self.repo / 'code.txt')}), ('Bash', {'command':'gh pr create -R unknown/repo'})]:
+                self.assertEqual(self.event('PreToolUse', tool_name=name, tool_input=payload), {})
+            first = self.event('Stop')
+            self.assertNotIn('decision', first)
+            self.assertIn('Optional', first['systemMessage'])
+            self.assertEqual(self.event('Stop'), {})
+
+    def test_exempt_reads_redirects_artifact_root_scratch_and_config(self):
+        for cmd in ('grep x code.txt 2>/dev/null', 'git -c color.ui=false diff', 'echo hello > scratch.txt'):
+            self.assertEqual(self.event('PreToolUse', tool_name='Bash', tool_input={'command':cmd}), {})
+        for path in (self.store / 'plan.src.html', self.store / 'tasks/older/plan.src.html',
+                     self.repo / 'scratch/note.txt', self.repo / 'work/notes.md',
+                     Path.home() / '.claude/settings.json', Path.home() / '.codex/config.toml',
+                     self.root / 'temporary.txt'):
+            self.assertEqual(self.event('PreToolUse', tool_name='Write', tool_input={'file_path':str(path)}), {})
+        self.assertIsNone(self.journal.load())
+
+    def test_bot_notice_and_empty_review_do_not_request_pages(self):
+        self.assertEqual(self.event('UserPromptSubmit', prompt='CI event: review-bot notice for pull request 123'), {})
+        self.assertEqual(self.event('Stop'), {})
+        self.begin('pr-review', pending=True)
+        self.assertEqual(self.event('Stop'), {})
+        self.journal.resolve('HEAD', 'HEAD')
+        self.assertEqual(self.event('Stop'), {})
+
+
+    def test_session_routing_survives_new_journal_from_sibling(self):
+        home = self.root / 'home'
+        home.mkdir()
+        other = self.root / 'other'
+        self.git('worktree', 'add', '--detach', str(other))
+        with patch.object(Path, 'home', return_value=home), patch('visual_review.core.artifact_root', return_value=self.store) as artifacts:
+            first = Journal(self.repo, 'routing-session')
+            first.begin('implementation', 'Shared request')
+            self.deliver('plan', first)
+            second = Journal(other, 'routing-session')
+            self.assertEqual(first.load()['id'], second.load()['id'])
+            self.assertEqual(second.missing(editing=True), [])
+            artifacts.assert_called_once()
+
+
+    def test_hook_infrastructure_error_does_not_deny_even_in_strict_mode(self):
+        from visual_review.cli import main
+        output = io.StringIO()
+        event = dict(cwd=str(self.repo), session_id='session-1', hook_event_name='PreToolUse', tool_name='Bash', tool_input={'command':'grep x code.txt 2>/dev/null'})
+        with patch('visual_review.cli.handle', side_effect=OSError('store unavailable')), patch('sys.stdin', io.StringIO(json.dumps(event))), redirect_stdout(output):
+            self.assertEqual(main(['hook']), 0)
+        result = json.loads(output.getvalue())
+        self.assertNotIn('hookSpecificOutput', result)
+        self.assertIn('Continuing', result['systemMessage'])
+
 
 
 if __name__ == '__main__':

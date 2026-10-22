@@ -103,14 +103,28 @@ class Journal:
             raise WorkflowError('Supply the host session id with --session')
         self.cwd = canonical(cwd)
         self.session = session
-        self.project_root = Path(root).resolve() if root else artifact_root(self.cwd)
+        if root is None:
+            registry = Path.home() / '.agents-work/visual-review-sessions'
+            registry.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(registry / 'sessions.sqlite3', timeout=15) as db:
+                db.execute('CREATE TABLE IF NOT EXISTS sessions (session TEXT PRIMARY KEY, root TEXT)')
+                row = db.execute('SELECT root FROM sessions WHERE session=?', (session,)).fetchone()
+                if row is None:
+                    candidate = str(artifact_root(self.cwd))
+                    db.execute('INSERT OR IGNORE INTO sessions VALUES (?,?)', (session, candidate))
+                    row = db.execute('SELECT root FROM sessions WHERE session=?', (session,)).fetchone()
+                root = row[0]
+        self.project_root = Path(root).resolve()
         self.project_root.mkdir(parents=True, exist_ok=True)
         if self.project_root == self.cwd or self.cwd in self.project_root.parents:
             raise WorkflowError('Artifacts must be outside the worktree')
         self.db = sqlite3.connect(self.project_root / 'journal.sqlite3', timeout=15, isolation_level=None)
         self.db.row_factory = sqlite3.Row
         self.db.execute('PRAGMA journal_mode=WAL')
-        self.db.execute('CREATE TABLE IF NOT EXISTS tasks (worktree TEXT, session TEXT, data TEXT, PRIMARY KEY(worktree,session))')
+        self.db.execute('CREATE TABLE IF NOT EXISTS session_tasks (session TEXT PRIMARY KEY, data TEXT)')
+        task = self.load()
+        if task:
+            self.cwd = Path(task['worktree'])
 
     @property
     def root(self):
@@ -121,14 +135,14 @@ class Journal:
         return path
 
     def load(self):
-        row = self.db.execute('SELECT data FROM tasks WHERE worktree=? AND session=?', (str(self.cwd), self.session)).fetchone()
+        row = self.db.execute('SELECT data FROM session_tasks WHERE session=?', (self.session,)).fetchone()
         return json.loads(row['data']) if row else None
 
     def transaction(self, change):
         self.db.execute('BEGIN IMMEDIATE')
         try:
             task = change(self.load())
-            self.db.execute('INSERT OR REPLACE INTO tasks VALUES (?,?,?)', (str(self.cwd), self.session, json.dumps(task)))
+            self.db.execute('INSERT OR REPLACE INTO session_tasks VALUES (?,?)', (self.session, json.dumps(task)))
             self.db.execute('COMMIT')
             return task
         except BaseException:
@@ -140,12 +154,10 @@ class Journal:
             raise WorkflowError('Reviews require --base and --target, or --pending until resolved')
         def update(old):
             identity = (kind, scope, base, target, pending)
-            if old and kind == 'discussion' and old['kind'] != 'discussion' and self.missing(old):
-                raise WorkflowError('Finish the active checkpoint or obtain an explicit human override before discussion mode')
             if old and not new and tuple(old[k] for k in ('kind', 'scope', 'base', 'target', 'pending')) == identity:
                 return old
             return dict(id=str(uuid.uuid4()), kind=kind, scope=scope, base=base, target=target,
-                        pending=pending, worktree=str(self.cwd), session=self.session, receipts={}, overrides=[], stops=[])
+                        pending=pending, worktree=str(self.cwd), session=self.session, receipts={}, overrides=[], stops=[], targets=[str(self.cwd)])
         return self.transaction(update)
 
     def resolve(self, base, target):
@@ -155,8 +167,24 @@ class Journal:
             raise WorkflowError('Declare a review before resolving its target')
         return self.begin(old['kind'], old['scope'], base, target)
 
+    def include_target(self, target):
+        target = str(canonical(target))
+        if not (Path(target) / '.git').exists():
+            raise WorkflowError('Include a Git worktree, not a scratch or configuration directory')
+        def update(task):
+            if target not in task['targets']:
+                task['targets'].append(target)
+            return task
+        return self.transaction(update)
+
     def source(self, task):
-        return fingerprint(self.cwd, task['base'], task['target'])
+        return {target: fingerprint(Path(target), task['base'] if target == task['worktree'] else None,
+                                   task['target'] if target == task['worktree'] else None)
+                for target in task['targets']}
+
+    def empty_review(self, task):
+        return task['kind'] in ('code-review', 'pr-review') and not task['pending'] and not git(
+            self.cwd, 'diff', task['base'], task['target'], '--').strip()
 
     def artifact(self, path):
         path = Path(path).expanduser().resolve()
@@ -194,6 +222,8 @@ class Journal:
             return ['post'] if publish else []
         if task['pending']:
             return ['resolve']
+        if not publish and not editing and self.empty_review(task):
+            return []
         stages = {'implementation': ['plan', 'post'], 'plan': ['plan'], 'code-review': ['review'], 'pr-review': ['review'], 'discussion': []}[task['kind']]
         if editing:
             stages = ['plan']

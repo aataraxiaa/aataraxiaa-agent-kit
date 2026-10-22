@@ -30,6 +30,8 @@ def main(argv=None):
     resolve = sub.add_parser('resolve')
     resolve.add_argument('--base', required=True)
     resolve.add_argument('--target', required=True)
+    include = sub.add_parser('include')
+    include.add_argument('--path', required=True)
     sub.add_parser('status')
     check = sub.add_parser('check')
     check.add_argument('--publish', action='store_true')
@@ -48,15 +50,16 @@ def main(argv=None):
                 result = handle(event)
             except (WorkflowError, OSError, subprocess.CalledProcessError) as exc:
                 message = 'Visual-review could not certify this workflow: ' + str(exc)
-                if event.get('hook_event_name') == 'PreToolUse':
-                    result = {'hookSpecificOutput': {'hookEventName': 'PreToolUse', 'permissionDecision': 'deny', 'permissionDecisionReason': message}}
-                else:
-                    result = {'systemMessage': message}
+                result = {'systemMessage': message + '. Continuing without enforcement.'}
             print(json.dumps(result))
             return 0
         journal = Journal(args.cwd, args.session)
         if args.action == 'begin':
             task = journal.begin(args.kind, args.scope, args.base, args.target, args.pending, args.new)
+        elif args.action == 'include':
+            if not journal.load():
+                raise WorkflowError('Begin a task before including a worktree')
+            task = journal.include_target(args.path)
         elif args.action == 'resolve':
             task = journal.resolve(args.base, args.target)
         elif args.action in ('render', 'record'):
