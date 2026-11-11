@@ -2,13 +2,38 @@
 
 <img src="plugins/aataraxiaa/assets/icon.png" alt="A deadpan yellow toolbox with a lowercase a" width="180">
 
-Personal development skills for Claude Code and Codex. The first skill, `aataraxiaa:visual-review`, helps you understand agent-written work through concise interactive HTML explanations.
+Personal development skills for Claude Code and Codex. `aataraxiaa:visual-review` explains agent-written work visually. `aataraxiaa:apple-development` supplies Apple platform guidance within your existing development workflow.
 
-**Advisory by default.** It offers visuals for meaningful plans, results and reviews. It does not block edits or force another turn. Routine inspection, bot notices and empty diffs need no page.
+**Visual review is advisory by default.** It offers visuals for meaningful plans, results and reviews. It does not block edits or force another turn. Routine inspection, bot notices and empty diffs need no page.
+
+## Apple development guidance
+
+The [Apple development skill](plugins/aataraxiaa/skills/apple-development/SKILL.md) routes iOS, iPadOS, and macOS work to relevant Apple documentation and small topic references. It fits inside AStack, Peakstack, or another development workflow. It adds no hooks, tooling dependencies, or mandatory full-codebase review.
+
+Only the skill description participates in discovery. When selected, the entry point routes to change, audit, or performance guidance. Focused questions go directly to a topic. References load as needed; Instruments guidance stays out of ordinary interface work. Apple exports and community skills are optional sources, not bundled dependencies.
+
+To make this explicit in an application's `AGENTS.md` or `CLAUDE.md`, add:
+
+```markdown
+For iOS, iPadOS, or macOS implementation and review, use the
+`aataraxiaa:apple-development` skill within the active development workflow.
+Read only its relevant path and topic references. If the skill is unavailable,
+report that and consult current Apple documentation for the affected area.
+```
+
+For a checkout-based trial without installing or publishing, tell the agent to read `plugins/aataraxiaa/skills/apple-development/SKILL.md` using its absolute path in this checkout. Installed plugin caches do not receive local edits automatically.
+
+Example requests:
+
+- “Use the Apple development guidance to audit this Mac app. Report findings; don't change app code.”
+- “Check this iPad layout against current platform guidance.”
+- “Investigate this scrolling hitch using Instruments; preserve the trace and distinguish measured causes from hypotheses.”
+
+The audit path records scope, evidence, sources, and verification gaps. Source review alone cannot establish runtime accessibility or measured performance. See the [evaluation scenarios](docs/apple-guidance-evaluation.md) for acceptance criteria and routing checks.
 
 ## Install
 
-Requires Python 3.9+, Git, Node.js and an OS HTML opener.
+The bundled visual-review tooling requires Python 3.9+, Git, Node.js and an OS HTML opener. Apple guidance itself is Markdown; building and profiling apps requires the appropriate Apple toolchain.
 
 ### Claude Code
 
@@ -20,7 +45,7 @@ claude plugin install aataraxiaa@aataraxiaa-tools
 ### Codex
 
 ```sh
-codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.2.1
+codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.3.0
 codex plugin add aataraxiaa@aataraxiaa-tools
 ```
 

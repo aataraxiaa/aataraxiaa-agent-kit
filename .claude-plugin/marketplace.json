@@ -8,8 +8,8 @@
     {
       "name": "aataraxiaa",
       "source": "./plugins/aataraxiaa",
-      "version": "0.2.1",
-      "description": "Development skills, starting with interactive visual review checkpoints."
+      "version": "0.3.0",
+      "description": "Development skills for visual review and progressively disclosed Apple platform guidance."
     }
   ]
 }
