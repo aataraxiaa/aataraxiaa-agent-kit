@@ -1,6 +1,6 @@
 ---
 name: apple-development
-description: Apple-specific reference routing for iOS, iPadOS, and macOS implementation, design questions, audits, and Instruments performance investigation. Supplements the active development workflow with relevant HIG and framework guidance.
+description: Apple-specific guidance for iOS, iPadOS, and macOS implementation, native UI audits and component choices, and Instruments performance investigation. Supplements the active development workflow with relevant HIG and framework guidance.
 ---
 
 # Apple development guidance
@@ -13,10 +13,11 @@ Establish the affected platform, UI framework, deployment target, and SDK/Swift 
 
 | Request | Read first |
 | --- | --- |
-| Implement, fix, or adapt an interface | [Change guidance](paths/change.md) |
+| Decide what to build or how an interface should work | [Design guidance](paths/design.md) |
+| Implement a feature, fix a bug, or refactor | [Implementation guidance](paths/change.md) |
 | Audit an app, screen, or diff | [Audit guidance](paths/audit.md) |
 | Investigate slowness, memory growth, or an Instruments trace | [Performance guidance](paths/performance.md) |
-| Answer a focused design/API question | Only the matching topic below |
+| Explain an API, platform behavior, or a version-specific difference | [Investigation guidance](paths/investigate.md) |
 
 Load references on demand, never this directory recursively. For a narrow task, start with one path and one relevant reference. Add another only when the code or question crosses that boundary. For a whole-app audit, cover topics in scoped passes. Do not reopen unchanged references already read this session.
 
@@ -27,7 +28,7 @@ Load references on demand, never this directory recursively. For a narrow task, 
 | iPhone navigation, touch, presentation | [iOS](references/ios.md) |
 | iPad resizing, navigation adaptation, input | [iPadOS](references/ipados.md) |
 | Mac windows, menus, commands, focus | [macOS](references/macos.md) |
-| Layout, safe areas, typography, materials, accessibility | [Interface](references/interface.md) |
+| Adaptive layout, size classes, safe areas, typography, materials, accessibility | [Interface](references/interface.md) |
 | SwiftUI state, identity, tasks, API choice | [SwiftUI](references/swiftui.md) |
 | Swift isolation, actors, async work | [Concurrency](references/concurrency.md) |
 | Finding/exporting Apple skills, optional community references, refreshing sources | [Source access](references/sources.md) |

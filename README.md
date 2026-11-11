@@ -10,7 +10,7 @@ Personal development skills for Claude Code and Codex. `aataraxiaa:visual-review
 
 The [Apple development skill](plugins/aataraxiaa/skills/apple-development/SKILL.md) routes iOS, iPadOS, and macOS work to relevant Apple documentation and small topic references. It fits inside AStack, Peakstack, or another development workflow. It adds no hooks, tooling dependencies, or mandatory full-codebase review.
 
-Only the skill description participates in discovery. When selected, the entry point routes to change, audit, or performance guidance. Focused questions go directly to a topic. References load as needed; Instruments guidance stays out of ordinary interface work. Apple exports and community skills are optional sources, not bundled dependencies.
+Only the skill description participates in discovery. When selected, the entry point routes to design, implementation, audit, focused investigation, or performance guidance. References load as needed; Instruments guidance stays out of ordinary interface work. Apple exports and community skills are optional sources, not bundled dependencies.
 
 To make this explicit in an application's `AGENTS.md` or `CLAUDE.md`, add:
 
@@ -45,7 +45,7 @@ claude plugin install aataraxiaa@aataraxiaa-tools
 ### Codex
 
 ```sh
-codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.3.0
+codex plugin marketplace add https://github.com/aataraxiaa/aataraxiaa-agent-kit.git --ref v0.4.0
 codex plugin add aataraxiaa@aataraxiaa-tools
 ```
 

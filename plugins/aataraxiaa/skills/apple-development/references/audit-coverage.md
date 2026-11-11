@@ -2,7 +2,7 @@
 
 Inventory reachable screens and flows from scene roots, navigation destinations, sheets, menus, settings, extensions, and feature flags. Exclude disabled or retired features explicitly. Trace shared wrappers before reviewing individual screens; a root constraint or shared state owner can affect every screen.
 
-Keep one external coverage table with these columns: platform, flow/state, source locations, runtime configuration, action, expected result, evidence, result. Use `observed pass`, `observed defect`, `source finding`, `blocked`, or `not checked`. A build or an accessibility identifier's existence cannot establish visibility or usability. Record the checkout revision and build provenance separately.
+Keep one external coverage table with these columns: platform, flow/state, source locations, runtime configuration, action, expected result, evidence, result. Record component fit and platform conventions for the primary flows even where behavior passes. Use `observed pass`, `design finding`, `observed defect`, `source finding`, `blocked`, or `not checked`. A build or an accessibility identifier's existence cannot establish visibility or usability. Record the checkout revision and build provenance separately.
 
 Cover each requested platform independently:
 

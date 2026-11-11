@@ -2,6 +2,7 @@
 
 Use this alongside the active implementation or bug-fix workflow.
 
+- For a feature that changes the user experience, resolve the relevant [design decisions](design.md) before choosing APIs. For a bug, reproduce the affected behavior and consult the API contract, plus release notes or Technotes when behavior varies by version. For a refactor or routine engineering change, use existing code and open a reference only for a specific uncertainty.
 - Read the affected view and its callers before choosing references. For UI behavior, select the target platform reference. For state or identity changes, select SwiftUI. Add interface guidance for layout, appearance, or accessibility changes.
 - Look up the specific control, modifier, or behavior in current Apple documentation. Check SDK and runtime availability separately. Do not raise deployment targets or modernize unrelated code as a side effect.
 - Use platform-native navigation, controls, commands, and presentation when they satisfy the requirement. Share data and behavior across platforms without assuming identical navigation or window structure.
